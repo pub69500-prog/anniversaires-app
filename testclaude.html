@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anniversaires — Classement par mois et par date</title>
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS pour lire le XLSX -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    ::-webkit-scrollbar{height:8px;width:8px}
+    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:9999px}
+    ::-webkit-scrollbar-track{background:#f1f5f9}
+    tr{transition:background-color .15s ease}
+    .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; }
+      .bg-white { box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <header class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">📅 Anniversaires</h1>
+    <p class="text-slate-600 mt-1">
+      Charge ton fichier <strong>.xlsx</strong> (NOM&nbsp;PRÉNOM en colonne <strong>B</strong>, dates en colonne <strong>C</strong> à partir de <strong>C5</strong> au format
+      <code>JJ-MM-AAAA</code>). Classe et filtre instantanément.
+    </p>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+    <!-- Messages d'erreur dynamiques -->
+    <div id="errorContainer"></div>
+
+    <!-- Carte d'import -->
+    <section class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 mb-6 no-print">
+      <div class="flex flex-col md:flex-row items-start md:items-center gap-4">
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-700 mb-1">Fichier Excel (.xlsx)</span>
+          <input id="fileInput" type="file" accept=".xlsx,.xls"
+                 class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-slate-800 file:text-white hover:file:bg-slate-700 cursor-pointer" />
+        </label>
+        <div class="grid grid-cols-2 sm:flex gap-3 ml-auto">
+          <button id="btnSortMonth" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800" title="Ctrl+1">Trier par mois</button>
+          <button id="btnSortDay" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800">Trier par jour</button>
+          <button id="btnSortUpcoming" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800" title="Ctrl+2">Prochains d'abord</button>
+          <button id="btnSortFull" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800">Trier complet</button>
+          <button id="btnExport" class="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 hidden" title="Ctrl+E">📥 CSV</button>
+          <button id="btnNotify" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 hidden">🔔 Notifier</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section filtres -->
+    <section class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-6 mb-6 no-print">
+      <div class="flex flex-col sm:flex-row gap-4">
+        <label class="block flex-1">
+          <span class="block text-sm font-medium text-slate-700 mb-2">Rechercher</span>
+          <input id="searchInput" type="text" placeholder="Cherche un nom, mois, âge..." 
+                 class="block w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-slate-400 focus:border-slate-400" />
+        </label>
+        <label class="block flex-shrink-0">
+          <span class="block text-sm font-medium text-slate-700 mb-2">Filtrer par mois</span>
+          <select id="filterMonth" class="block w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-slate-400">
+            <option value="all">Tous les mois</option>
+          </select>
+        </label>
+        <div class="flex flex-col justify-end">
+          <button id="btnToggleDarkMode" class="px-4 py-2 rounded-xl bg-slate-700 text-white text-sm font-semibold hover:bg-slate-600">🌙</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tableau -->
+    <section class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 overflow-hidden">
+      <div class="p-6 border-b border-slate-200">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <h2 class="text-lg font-semibold">Liste des anniversaires</h2>
+          <p id="metaInfo" class="text-sm text-slate-600">Aucune donnée</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="bg-slate-50 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            <tr>
+              <th class="px-4 py-3">Nom & Prénom</th>
+              <th class="px-4 py-3">Date</th>
+              <th class="px-4 py-3">Mois</th>
+              <th class="px-4 py-3">Jour</th>
+              <th class="px-4 py-3">Prochain</th>
+              <th class="px-4 py-3">Jours restants</th>
+              <th class="px-4 py-3">Âge à venir</th>
+            </tr>
+          </thead>
+          <tbody id="dataTableBody" class="bg-white divide-y divide-slate-200">
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Utilitaires
+    const $ = id => document.getElementById(id);
+    const today = new Date();
+    const todayStr = `${today.getDate().toString().padStart(2,'0')}-${(today.getMonth()+1).toString().padStart(2,'0')}`;
+    
+    const months = [
+      'janvier','février','mars','avril','mai','juin',
+      'juillet','août','septembre','octobre','novembre','décembre'
+    ];
+
+    // État global
+    const state = {
+      data: [],
+      filtered: [],
+      sort: 'upcoming',
+      month: 'all',
+      query: '',
+      isDark: localStorage.getItem('darkMode') === 'true',
+      stats: { valid: 0, errors: 0, duplicates: 0 }
+    };
+
+    // Interface d'erreur améliorée
+    function showError(message, type = 'error') {
+      const container = $('errorContainer');
+      const colors = {
+        error: 'bg-red-50 border-red-200 text-red-700',
+        warning: 'bg-amber-50 border-amber-200 text-amber-700',
+        success: 'bg-green-50 border-green-200 text-green-700'
+      };
+      
+      const errorDiv = document.createElement('div');
+      errorDiv.className = `${colors[type]} border px-4 py-3 rounded-xl mb-4 transition-all duration-300`;
+      errorDiv.innerHTML = `
+        <div class="flex items-center justify-between">
+          <span>${type === 'error' ? '⚠️' : type === 'warning' ? '⚠️' : '✅'} ${message}</span>
+          <button onclick="this.parentElement.parentElement.remove()" class="text-xl leading-none">&times;</button>
+        </div>
+      `;
+      
+      container.appendChild(errorDiv);
+      setTimeout(() => errorDiv.remove(), 8000);
+    }
+
+    function showLoading(message = "Chargement...") {
+      $('metaInfo').innerHTML = `<span class="animate-pulse">⏳ ${message}</span>`;
+    }
+
+    function hideLoading() {
+      updateStats();
+    }
+
+    // Gestion du mode sombre
+    function toggleDarkMode() {
+      state.isDark = !state.isDark;
+      localStorage.setItem('darkMode', state.isDark);
+      document.body.className = state.isDark 
+        ? 'bg-slate-900 text-slate-100' 
+        : 'bg-slate-50 text-slate-800';
+      $('btnToggleDarkMode').textContent = state.isDark ? '☀️' : '🌙';
+    }
+
+    // Initialisation du mode sombre
+    if (state.isDark) toggleDarkMode();
+
+    // Détection et suppression des doublons
+    function removeDuplicates(rows) {
+      const seen = new Map();
+      const duplicates = [];
+      
+      const unique = rows.filter(row => {
+        const key = `${row.name.toLowerCase().trim()}_${row.dmy}`;
+        if (seen.has(key)) {
+          duplicates.push(row.name);
+          return false;
+        }
+        seen.set(key, true);
+        return true;
+      });
+
+      if (duplicates.length > 0) {
+        showError(`${duplicates.length} doublon(s) supprimé(s): ${duplicates.slice(0,3).join(', ')}${duplicates.length > 3 ? '...' : ''}`, 'warning');
+        state.stats.duplicates = duplicates.length;
+      }
+
+      return unique;
+    }
+
+    // Recherche intelligente
+    function smartSearch(query, items) {
+      if (!query) return items;
+      
+      const tokens = query.toLowerCase().split(' ').filter(t => t.length > 0);
+      
+      return items.filter(item => {
+        const searchText = `${item.name} ${item.monthName} ${item.dmy} ${item.ageNext}`.toLowerCase();
+        return tokens.every(token => searchText.includes(token));
+      });
+    }
+
+    // Statistiques détaillées
+    function updateStats() {
+      const { valid, errors, duplicates } = state.stats;
+      const parts = [`${state.filtered.length} affiché(s)`];
+      
+      if (valid > 0) parts.push(`${valid} valide(s)`);
+      if (errors > 0) parts.push(`<span class="text-amber-600">${errors} ignorée(s)</span>`);
+      if (duplicates > 0) parts.push(`<span class="text-blue-600">${duplicates} doublon(s)</span>`);
+      
+      $('metaInfo').innerHTML = parts.join(' • ');
+    }
+
+    // Export CSV
+    function exportToCSV() {
+      if (state.filtered.length === 0) {
+        showError('Aucune donnée à exporter');
+        return;
+      }
+
+      const headers = ['Nom', 'Date', 'Mois', 'Prochain', 'Jours restants', 'Âge'];
+      const csvContent = [
+        headers.join(','),
+        ...state.filtered.map(row => [
+          `"${row.name.replace(/"/g, '""')}"`,
+          row.dmy,
+          row.monthName,
+          formatDMY(row.next),
+          row.daysLeft,
+          row.ageNext
+        ].join(','))
+      ].join('\n');
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `anniversaires_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      showError(`${state.filtered.length} lignes exportées avec succès`, 'success');
+    }
+
+    // Notifications pour anniversaires proches
+    function checkUpcomingBirthdays() {
+      const upcoming = state.data.filter(x => x.daysLeft >= 0 && x.daysLeft <= 7);
+      const todayBirthdays = state.data.filter(x => x.daysLeft === 0);
+      
+      if (todayBirthdays.length > 0) {
+        showError(`🎉 Aujourd'hui: ${todayBirthdays.map(x => x.name).join(', ')} !`, 'success');
+      }
+      
+      if (upcoming.length > todayBirthdays.length) {
+        const others = upcoming.filter(x => x.daysLeft > 0);
+        if (others.length > 0) {
+          showError(`📅 Dans les 7 jours: ${others.length} anniversaire(s)`, 'warning');
+        }
+      }
+    }
+
+    // Parsing des dates amélioré
+    function parseDate(value) {
+      if (!value) return null;
+
+      // Nombre Excel (jours depuis 1900)
+      if (typeof value === 'number' && value > 1000) {
+        const excelEpoch = new Date(1900, 0, 1);
+        const date = new Date(excelEpoch.getTime() + (value - 2) * 24 * 60 * 60 * 1000);
+        return isNaN(date.getTime()) ? null : date;
+      }
+
+      // Date JavaScript
+      if (value instanceof Date && !isNaN(value.getTime())) {
+        return value;
+      }
+
+      // Chaîne de caractères
+      if (typeof value === 'string') {
+        const str = value.trim();
+        
+        // Format JJ-MM-AAAA ou JJ/MM/AAAA
+        const dmyMatch = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+        if (dmyMatch) {
+          const [, day, month, year] = dmyMatch;
+          const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+          return isNaN(date.getTime()) ? null : date;
+        }
+
+        // ISO ou autres formats standards
+        const date = new Date(str);
+        return isNaN(date.getTime()) ? null : date;
+      }
+
+      return null;
+    }
+
+    function formatDMY(date) {
+      const d = date.getDate().toString().padStart(2, '0');
+      const m = (date.getMonth() + 1).toString().padStart(2, '0');
+      const y = date.getFullYear();
+      return `${d}-${m}-${y}`;
+    }
+
+    function getNextBirthday(birthDate) {
+      const thisYear = today.getFullYear();
+      let next = new Date(thisYear, birthDate.getMonth(), birthDate.getDate());
+      if (next <= today) {
+        next = new Date(thisYear + 1, birthDate.getMonth(), birthDate.getDate());
+      }
+      return next;
+    }
+
+    function getDaysUntil(targetDate) {
+      const diffTime = targetDate.getTime() - today.getTime();
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    function getAge(birthDate, atDate = today) {
+      let age = atDate.getFullYear() - birthDate.getFullYear();
+      const monthDiff = atDate.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && atDate.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    }
+
+    // Chargement des données du fichier Excel
+    function loadFromSheet(sheet) {
+      showLoading("Analyse du fichier...");
+      
+      const rows = [];
+      let validCount = 0, errorCount = 0;
+      let emptyCount = 0;
+
+      for (let rowIndex = 5; rowIndex <= 1000; rowIndex++) {
+        const cellName = sheet[`B${rowIndex}`];
+        const cellDate = sheet[`C${rowIndex}`];
+
+        if (!cellName?.v && !cellDate?.v) {
+          emptyCount++;
+          if (emptyCount >= 50) break;
+          continue;
+        }
+
+        emptyCount = 0;
+        const name = cellName?.v?.toString().trim();
+        const d = parseDate(cellDate?.v);
+
+        if (d && name && name.length > 0) {
+          const dmy = formatDMY(d);
+          const next = getNextBirthday(d);
+          const daysLeft = getDaysUntil(next);
+          const age = getAge(d);
+          const ageNext = age + (next.getFullYear() > today.getFullYear() ? 1 : 0);
+          const monthNum = d.getMonth() + 1;
+          const monthName = months[d.getMonth()];
+          const day = d.getDate();
+
+          rows.push({
+            name, dmy, next, daysLeft, age, ageNext,
+            monthNum, monthName, day
+          });
+          validCount++;
+        } else if (cellName?.v || cellDate?.v) {
+          errorCount++;
+        }
+      }
+
+      // Suppression des doublons
+      const uniqueRows = removeDuplicates(rows);
+      
+      state.data = uniqueRows;
+      state.stats = { valid: validCount, errors: errorCount, duplicates: rows.length - uniqueRows.length };
+      
+      // Mise à jour de l'interface
+      populateMonthFilter();
+      applyFiltersAndRender();
+      
+      // Afficher les boutons d'action
+      $('btnExport').classList.remove('hidden');
+      $('btnNotify').classList.remove('hidden');
+      
+      // Vérifier les anniversaires proches
+      checkUpcomingBirthdays();
+      
+      hideLoading();
+      
+      if (validCount > 0) {
+        showError(`✅ ${validCount} anniversaires chargés avec succès`, 'success');
+      }
+      if (errorCount > 0) {
+        showError(`⚠️ ${errorCount} lignes ignorées (données incomplètes)`, 'warning');
+      }
+    }
+
+    // Remplissage du filtre des mois
+    function populateMonthFilter() {
+      const monthsInData = [...new Set(state.data.map(x => x.monthNum))].sort((a, b) => a - b);
+      const filterMonth = $('filterMonth');
+      
+      filterMonth.innerHTML = '<option value="all">Tous les mois</option>';
+      monthsInData.forEach(monthNum => {
+        const option = document.createElement('option');
+        option.value = monthNum;
+        option.textContent = `${months[monthNum - 1]} (${state.data.filter(x => x.monthNum === monthNum).length})`;
+        filterMonth.appendChild(option);
+      });
+    }
+
+    // Application des filtres et tri
+    function applyFiltersAndRender() {
+      let filtered = [...state.data];
+
+      // Filtre par mois
+      if (state.month !== 'all') {
+        filtered = filtered.filter(x => x.monthNum === parseInt(state.month));
+      }
+
+      // Recherche intelligente
+      filtered = smartSearch(state.query, filtered);
+
+      // Tri
+      switch (state.sort) {
+        case 'month':
+          filtered.sort((a, b) => a.monthNum - b.monthNum || a.day - b.day);
+          break;
+        case 'day':
+          filtered.sort((a, b) => a.day - b.day);
+          break;
+        case 'upcoming':
+          filtered.sort((a, b) => a.daysLeft - b.daysLeft);
+          break;
+        case 'full':
+          filtered.sort((a, b) => a.next.getTime() - b.next.getTime());
+          break;
+      }
+
+      state.filtered = filtered;
+      renderTable();
+    }
+
+    // Rendu du tableau
+    function renderTable() {
+      const tbody = $('dataTableBody');
+      tbody.innerHTML = '';
+
+      state.filtered.forEach(x => {
+        const tr = document.createElement('tr');
+        const isToday = x.daysLeft === 0;
+        
+        if (isToday) {
+          tr.className = 'bg-green-50 border-l-4 border-green-400';
+        }
+
+        tr.innerHTML = `
+          <td class="px-4 py-2 font-medium ${isToday ? 'text-green-800' : ''}">${x.name}</td>
+          <td class="px-4 py-2 text-sm">${x.dmy}</td>
+          <td class="px-4 py-2 text-sm">${x.monthName}</td>
+          <td class="px-4 py-2 text-sm">${x.day}</td>
+          <td class="px-4 py-2 text-sm">${formatDMY(x.next)}</td>
+          <td class="px-4 py-2 text-sm ${isToday ? 'font-bold text-green-600' : x.daysLeft <= 7 ? 'text-amber-600' : ''}">${x.daysLeft === 0 ? "Aujourd'hui !" : x.daysLeft}</td>
+          <td class="px-4 py-2 text-sm">${x.ageNext} ans</td>`;
+        
+        tr.addEventListener('mouseenter', () => {
+          if (!isToday) tr.style.backgroundColor = state.isDark ? '#334155' : '#f8fafc';
+        });
+        tr.addEventListener('mouseleave', () => {
+          if (!isToday) tr.style.backgroundColor = '';
+        });
+        
+        tbody.appendChild(tr);
+      });
+
+      updateStats();
+    }
+
+    // Raccourcis clavier
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch(e.key) {
+          case 'f':
+            e.preventDefault();
+            $('searchInput').focus();
+            break;
+          case 'e':
+            e.preventDefault();
+            exportToCSV();
+            break;
+          case '1':
+            e.preventDefault();
+            state.sort = 'month';
+            applyFiltersAndRender();
+            break;
+          case '2':
+            e.preventDefault();
+            state.sort = 'upcoming';
+            applyFiltersAndRender();
+            break;
+        }
+      }
+    });
+
+    // Événements UI
+    $('filterMonth').addEventListener('change', e => {
+      state.month = e.target.value;
+      applyFiltersAndRender();
+    });
+
+    $('searchInput').addEventListener('input', e => {
+      state.query = e.target.value.trim();
+      applyFiltersAndRender();
+    });
+
+    $('btnSortMonth').addEventListener('click', () => {
+      state.sort = 'month';
+      applyFiltersAndRender();
+    });
+
+    $('btnSortDay').addEventListener('click', () => {
+      state.sort = 'day';
+      applyFiltersAndRender();
+    });
+
+    $('btnSortUpcoming').addEventListener('click', () => {
+      state.sort = 'upcoming';
+      applyFiltersAndRender();
+    });
+
+    $('btnSortFull').addEventListener('click', () => {
+      state.sort = 'full';
+      applyFiltersAndRender();
+    });
+
+    $('btnExport').addEventListener('click', exportToCSV);
+    $('btnNotify').addEventListener('click', checkUpcomingBirthdays);
+    $('btnToggleDarkMode').addEventListener('click', toggleDarkMode);
+
+    // Gestion des fichiers
+    $('fileInput').addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      try {
+        showLoading("Lecture du fichier...");
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        loadFromSheet(sheet);
+      } catch (error) {
+        hideLoading();
+        showError(`Erreur lors de la lecture du fichier: ${error.message}`);
+      }
+    });
+
+    // Drag & Drop
+    document.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      document.body.style.backgroundColor = state.isDark ? '#1e293b' : '#f1f5f9';
+    });
+
+    document.addEventListener('dragleave', (e) => {
+      if (!e.relatedTarget) {
+        document.body.style.backgroundColor = '';
+      }
+    });
+
+    document.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      document.body.style.backgroundColor = '';
+      
+      const file = e.dataTransfer.files?.[0];
+      if (!file) return;
+      
+      if (!/\.xlsx?$/.test(file.name)) {
+        showError('Veuillez déposer un fichier .xlsx ou .xls');
+        return;
+      }
+
+      try {
+        showLoading("Lecture du fichier...");
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        loadFromSheet(sheet);
+      } catch (error) {
+        hideLoading();
+        showError(`Erreur lors de la lecture du fichier: ${error.message}`);
+      }
+    });
+
+    // Auto-chargement du fichier anniversaires_canon.xlsx
+    (async function tryAutoLoad() {
+      try {
+        showLoading("Tentative de chargement automatique...");
+        const res = await fetch('anniversaires_canon.xlsx');
+        if (!res.ok) throw new Error('Fichier non trouvé');
+        
+        const buf = await res.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        loadFromSheet(sheet);
+      } catch (error) {
+        hideLoading();
+        // Échec silencieux pour l'auto-chargement
+      }
+    })();
+  </script>
+</body>
+</html>
