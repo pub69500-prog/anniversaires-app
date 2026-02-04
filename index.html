@@ -392,10 +392,7 @@
       state.data = uniqueRows;
       state.stats = { valid: validCount, errors: errorCount, duplicates: rows.length - uniqueRows.length };
       
-      // Mise à jour de l'interface : trier par prochains d'abord (aujourd'hui en premier)
-      state.sort = 'upcoming';
-      populateMonthFilter();
-      applyFiltersAndRender();
+      Mise à jour de l'interface
 
       
       hideLoading();
