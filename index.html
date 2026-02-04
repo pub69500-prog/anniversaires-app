@@ -308,11 +308,25 @@
     }
 
     function getNextBirthday(birthDate) {
-      const thisYear = today.getFullYear();
-      let next = new Date(thisYear, birthDate.getMonth(), birthDate.getDate());
-      if (next <= today) {
-        next = new Date(thisYear + 1, birthDate.getMonth(), birthDate.getDate());
-      }
+  const thisYear = today.getFullYear();
+  let next = new Date(thisYear, birthDate.getMonth(), birthDate.getDate());
+
+  // Si c'est aujourd'hui, on garde cette année
+  if (
+    next.getDate() === today.getDate() &&
+    next.getMonth() === today.getMonth()
+  ) {
+    return next;
+  }
+
+  // Si la date est déjà passée cette année, on passe à l'année prochaine
+  if (next < today) {
+    next = new Date(thisYear + 1, birthDate.getMonth(), birthDate.getDate());
+  }
+
+  return next;
+}
+
       return next;
     }
 
