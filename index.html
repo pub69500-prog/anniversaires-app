@@ -4,10 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Anniversaires — Classement par mois et par date</title>
+
   <!-- Tailwind CSS (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- SheetJS pour lire le XLSX -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
   <style>
     ::-webkit-scrollbar{height:8px;width:8px}
     ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:9999px}
@@ -22,6 +24,7 @@
     }
   </style>
 </head>
+
 <body class="bg-slate-50 text-slate-800">
   <header class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">📅 Anniversaires</h1>
@@ -59,7 +62,7 @@
       <div class="flex flex-col sm:flex-row gap-4">
         <label class="block flex-1">
           <span class="block text-sm font-medium text-slate-700 mb-2">Rechercher</span>
-          <input id="searchInput" type="text" placeholder="Cherche un nom, mois, âge..." 
+          <input id="searchInput" type="text" placeholder="Cherche un nom, mois, âge..."
                  class="block w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-slate-400 focus:border-slate-400" />
         </label>
         <label class="block flex-shrink-0">
@@ -95,8 +98,7 @@
               <th class="px-4 py-3">Âge à venir</th>
             </tr>
           </thead>
-          <tbody id="dataTableBody" class="bg-white divide-y divide-slate-200">
-          </tbody>
+          <tbody id="dataTableBody" class="bg-white divide-y divide-slate-200"></tbody>
         </table>
       </div>
     </section>
@@ -105,9 +107,11 @@
   <script>
     // Utilitaires
     const $ = id => document.getElementById(id);
+
+    // On fige "today" à minuit pour éviter les effets d'heure
     const today = new Date();
-    const todayStr = `${today.getDate().toString().padStart(2,'0')}-${(today.getMonth()+1).toString().padStart(2,'0')}`;
-    
+    today.setHours(0, 0, 0, 0);
+
     const months = [
       'janvier','février','mars','avril','mai','juin',
       'juillet','août','septembre','octobre','novembre','décembre'
@@ -132,16 +136,16 @@
         warning: 'bg-amber-50 border-amber-200 text-amber-700',
         success: 'bg-green-50 border-green-200 text-green-700'
       };
-      
+
       const errorDiv = document.createElement('div');
       errorDiv.className = `${colors[type]} border px-4 py-3 rounded-xl mb-4 transition-all duration-300`;
       errorDiv.innerHTML = `
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-3">
           <span>${type === 'error' ? '⚠️' : type === 'warning' ? '⚠️' : '✅'} ${message}</span>
           <button onclick="this.parentElement.parentElement.remove()" class="text-xl leading-none">&times;</button>
         </div>
       `;
-      
+
       container.appendChild(errorDiv);
       setTimeout(() => errorDiv.remove(), 8000);
     }
@@ -154,24 +158,27 @@
       updateStats();
     }
 
-    // Gestion du mode sombre
-    function toggleDarkMode() {
-      state.isDark = !state.isDark;
-      localStorage.setItem('darkMode', state.isDark);
-      document.body.className = state.isDark 
-        ? 'bg-slate-900 text-slate-100' 
+    // Mode sombre (init correcte)
+    function applyDarkMode() {
+      document.body.className = state.isDark
+        ? 'bg-slate-900 text-slate-100'
         : 'bg-slate-50 text-slate-800';
       $('btnToggleDarkMode').textContent = state.isDark ? '☀️' : '🌙';
     }
 
-    // Initialisation du mode sombre
-    if (state.isDark) toggleDarkMode();
+    function toggleDarkMode() {
+      state.isDark = !state.isDark;
+      localStorage.setItem('darkMode', state.isDark);
+      applyDarkMode();
+    }
+
+    applyDarkMode();
 
     // Détection et suppression des doublons
     function removeDuplicates(rows) {
       const seen = new Map();
       const duplicates = [];
-      
+
       const unique = rows.filter(row => {
         const key = `${row.name.toLowerCase().trim()}_${row.dmy}`;
         if (seen.has(key)) {
@@ -193,9 +200,9 @@
     // Recherche intelligente
     function smartSearch(query, items) {
       if (!query) return items;
-      
+
       const tokens = query.toLowerCase().split(' ').filter(t => t.length > 0);
-      
+
       return items.filter(item => {
         const searchText = `${item.name} ${item.monthName} ${item.dmy} ${item.ageNext}`.toLowerCase();
         return tokens.every(token => searchText.includes(token));
@@ -206,11 +213,11 @@
     function updateStats() {
       const { valid, errors, duplicates } = state.stats;
       const parts = [`${state.filtered.length} affiché(s)`];
-      
+
       if (valid > 0) parts.push(`${valid} valide(s)`);
       if (errors > 0) parts.push(`<span class="text-amber-600">${errors} ignorée(s)</span>`);
       if (duplicates > 0) parts.push(`<span class="text-blue-600">${duplicates} doublon(s)</span>`);
-      
+
       $('metaInfo').innerHTML = parts.join(' • ');
     }
 
@@ -233,7 +240,7 @@
           row.ageNext
         ].join(','))
       ].join('\n');
-      
+
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -243,7 +250,7 @@
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       showError(`${state.filtered.length} lignes exportées avec succès`, 'success');
     }
 
@@ -251,11 +258,11 @@
     function checkUpcomingBirthdays() {
       const upcoming = state.data.filter(x => x.daysLeft >= 0 && x.daysLeft <= 7);
       const todayBirthdays = state.data.filter(x => x.daysLeft === 0);
-      
+
       if (todayBirthdays.length > 0) {
         showError(`🎉 Aujourd'hui: ${todayBirthdays.map(x => x.name).join(', ')} !`, 'success');
       }
-      
+
       if (upcoming.length > todayBirthdays.length) {
         const others = upcoming.filter(x => x.daysLeft > 0);
         if (others.length > 0) {
@@ -268,33 +275,41 @@
     function parseDate(value) {
       if (!value) return null;
 
-      // Nombre Excel (jours depuis 1900)
+      // Date JavaScript
+      if (value instanceof Date && !isNaN(value.getTime())) {
+        const d = new Date(value);
+        d.setHours(0,0,0,0);
+        return d;
+      }
+
+      // Nombre Excel (fallback)
       if (typeof value === 'number' && value > 1000) {
         const excelEpoch = new Date(1900, 0, 1);
         const date = new Date(excelEpoch.getTime() + (value - 2) * 24 * 60 * 60 * 1000);
-        return isNaN(date.getTime()) ? null : date;
-      }
-
-      // Date JavaScript
-      if (value instanceof Date && !isNaN(value.getTime())) {
-        return value;
+        if (isNaN(date.getTime())) return null;
+        date.setHours(0,0,0,0);
+        return date;
       }
 
       // Chaîne de caractères
       if (typeof value === 'string') {
         const str = value.trim();
-        
+
         // Format JJ-MM-AAAA ou JJ/MM/AAAA
         const dmyMatch = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
         if (dmyMatch) {
           const [, day, month, year] = dmyMatch;
-          const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-          return isNaN(date.getTime()) ? null : date;
+          const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+          if (isNaN(date.getTime())) return null;
+          date.setHours(0,0,0,0);
+          return date;
         }
 
         // ISO ou autres formats standards
         const date = new Date(str);
-        return isNaN(date.getTime()) ? null : date;
+        if (isNaN(date.getTime())) return null;
+        date.setHours(0,0,0,0);
+        return date;
       }
 
       return null;
@@ -308,24 +323,18 @@
     }
 
     function getNextBirthday(birthDate) {
-  const thisYear = today.getFullYear();
-  let next = new Date(thisYear, birthDate.getMonth(), birthDate.getDate());
+      const thisYear = today.getFullYear();
+      let next = new Date(thisYear, birthDate.getMonth(), birthDate.getDate());
+      next.setHours(0,0,0,0);
 
-  // Si c'est aujourd'hui, on garde cette année
-  if (
-    next.getDate() === today.getDate() &&
-    next.getMonth() === today.getMonth()
-  ) {
-    return next;
-  }
+      // Si la date est déjà passée cette année, on passe à l'année prochaine
+      if (next < today) {
+        next = new Date(thisYear + 1, birthDate.getMonth(), birthDate.getDate());
+        next.setHours(0,0,0,0);
+      }
 
-  // Si la date est déjà passée cette année, on passe à l'année prochaine
-  if (next < today) {
-    next = new Date(thisYear + 1, birthDate.getMonth(), birthDate.getDate());
-  }
-
-  return next;
-}
+      return next;
+    }
 
     function getDaysUntil(targetDate) {
       const diffTime = targetDate.getTime() - today.getTime();
@@ -341,12 +350,28 @@
       return age;
     }
 
+    // ✅ Met toujours "aujourd'hui" en premier, quel que soit le tri choisi
+    function withTodayFirst(baseComparator) {
+      return (a, b) => {
+        const aToday = a.daysLeft === 0 ? 0 : 1;
+        const bToday = b.daysLeft === 0 ? 0 : 1;
+        if (aToday !== bToday) return aToday - bToday;
+
+        // Si c'est aujourd'hui pour les deux, tri par nom (stable et lisible)
+        if (aToday === 0 && bToday === 0) {
+          return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+        }
+
+        return baseComparator(a, b);
+      };
+    }
+
     // Chargement des données du fichier Excel
     function loadFromSheet(sheet) {
       showLoading("Analyse du fichier...");
-      
+
       const rows = [];
-      let validCount = 0, errorCount = 0;
+      let errorCount = 0;
       let emptyCount = 0;
 
       for (let rowIndex = 5; rowIndex <= 1000; rowIndex++) {
@@ -360,6 +385,7 @@
         }
 
         emptyCount = 0;
+
         const name = cellName?.v?.toString().trim();
         const d = parseDate(cellDate?.v);
 
@@ -377,7 +403,6 @@
             name, dmy, next, daysLeft, age, ageNext,
             monthNum, monthName, day
           });
-          validCount++;
         } else if (cellName?.v || cellDate?.v) {
           errorCount++;
         }
@@ -385,17 +410,24 @@
 
       // Suppression des doublons
       const uniqueRows = removeDuplicates(rows);
-      
-      state.data = uniqueRows;
-      state.stats = { valid: validCount, errors: errorCount, duplicates: rows.length - uniqueRows.length };
-      
-      Mise à jour de l'interface
 
-      
+      state.data = uniqueRows;
+      state.stats = {
+        valid: uniqueRows.length,
+        errors: errorCount,
+        duplicates: rows.length - uniqueRows.length
+      };
+
+      // ✅ Mise à jour de l'interface
+      populateMonthFilter();
+      $('btnExport').classList.toggle('hidden', uniqueRows.length === 0);
+      $('btnNotify').classList.toggle('hidden', uniqueRows.length === 0);
+      applyFiltersAndRender();
+
       hideLoading();
-      
-      if (validCount > 0) {
-        showError(`✅ ${validCount} anniversaires chargés avec succès`, 'success');
+
+      if (uniqueRows.length > 0) {
+        showError(`✅ ${uniqueRows.length} anniversaires chargés avec succès`, 'success');
       }
       if (errorCount > 0) {
         showError(`⚠️ ${errorCount} lignes ignorées (données incomplètes)`, 'warning');
@@ -406,7 +438,7 @@
     function populateMonthFilter() {
       const monthsInData = [...new Set(state.data.map(x => x.monthNum))].sort((a, b) => a - b);
       const filterMonth = $('filterMonth');
-      
+
       filterMonth.innerHTML = '<option value="all">Tous les mois</option>';
       monthsInData.forEach(monthNum => {
         const option = document.createElement('option');
@@ -422,25 +454,26 @@
 
       // Filtre par mois
       if (state.month !== 'all') {
-        filtered = filtered.filter(x => x.monthNum === parseInt(state.month));
+        filtered = filtered.filter(x => x.monthNum === parseInt(state.month, 10));
       }
 
-      // Recherche intelligente
+      // Recherche
       filtered = smartSearch(state.query, filtered);
 
-      // Tri
+      // Tri + "aujourd'hui" toujours en premier
       switch (state.sort) {
         case 'month':
-          filtered.sort((a, b) => a.monthNum - b.monthNum || a.day - b.day);
+          filtered.sort(withTodayFirst((a, b) => a.monthNum - b.monthNum || a.day - b.day));
           break;
         case 'day':
-          filtered.sort((a, b) => a.day - b.day);
+          filtered.sort(withTodayFirst((a, b) => a.day - b.day || a.monthNum - b.monthNum));
           break;
         case 'upcoming':
-          filtered.sort((a, b) => a.daysLeft - b.daysLeft);
+          // daysLeft met déjà aujourd'hui en premier (0), on garde mais on sécurise
+          filtered.sort(withTodayFirst((a, b) => a.daysLeft - b.daysLeft));
           break;
         case 'full':
-          filtered.sort((a, b) => a.next.getTime() - b.next.getTime());
+          filtered.sort(withTodayFirst((a, b) => a.next.getTime() - b.next.getTime()));
           break;
       }
 
@@ -456,7 +489,7 @@
       state.filtered.forEach(x => {
         const tr = document.createElement('tr');
         const isToday = x.daysLeft === 0;
-        
+
         if (isToday) {
           tr.className = 'bg-green-50 border-l-4 border-green-400';
         }
@@ -467,16 +500,19 @@
           <td class="px-4 py-2 text-sm">${x.monthName}</td>
           <td class="px-4 py-2 text-sm">${x.day}</td>
           <td class="px-4 py-2 text-sm">${formatDMY(x.next)}</td>
-          <td class="px-4 py-2 text-sm ${isToday ? 'font-bold text-green-600' : x.daysLeft <= 7 ? 'text-amber-600' : ''}">${x.daysLeft === 0 ? "Aujourd'hui !" : x.daysLeft}</td>
-          <td class="px-4 py-2 text-sm">${x.ageNext} ans</td>`;
-        
+          <td class="px-4 py-2 text-sm ${isToday ? 'font-bold text-green-600' : x.daysLeft <= 7 ? 'text-amber-600' : ''}">
+            ${isToday ? "Aujourd'hui !" : x.daysLeft}
+          </td>
+          <td class="px-4 py-2 text-sm">${x.ageNext} ans</td>
+        `;
+
         tr.addEventListener('mouseenter', () => {
           if (!isToday) tr.style.backgroundColor = state.isDark ? '#334155' : '#f8fafc';
         });
         tr.addEventListener('mouseleave', () => {
           if (!isToday) tr.style.backgroundColor = '';
         });
-        
+
         tbody.appendChild(tr);
       });
 
@@ -544,7 +580,7 @@
     $('btnNotify').addEventListener('click', checkUpcomingBirthdays);
     $('btnToggleDarkMode').addEventListener('click', toggleDarkMode);
 
-    // Gestion des fichiers
+    // Lecture fichier (input)
     $('fileInput').addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -552,7 +588,7 @@
       try {
         showLoading("Lecture du fichier...");
         const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array' });
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true }); // important pour dates
         const sheet = wb.Sheets[wb.SheetNames[0]];
         loadFromSheet(sheet);
       } catch (error) {
@@ -576,10 +612,10 @@
     document.addEventListener('drop', async (e) => {
       e.preventDefault();
       document.body.style.backgroundColor = '';
-      
+
       const file = e.dataTransfer.files?.[0];
       if (!file) return;
-      
+
       if (!/\.xlsx?$/.test(file.name)) {
         showError('Veuillez déposer un fichier .xlsx ou .xls');
         return;
@@ -588,7 +624,7 @@
       try {
         showLoading("Lecture du fichier...");
         const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array' });
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         loadFromSheet(sheet);
       } catch (error) {
@@ -597,20 +633,54 @@
       }
     });
 
-    // Auto-chargement du fichier anniversaires_canon.xlsx
+    // Auto-chargement (si la page est servie en http/https)
+    async function tryFetchXlsx(url) {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Fichier non trouvé');
+      const buf = await res.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      loadFromSheet(sheet);
+      return true;
+    }
+
     (async function tryAutoLoad() {
+      // Sur iPhone / Safari, ouvrir un .html "local" (file://) bloque souvent le fetch d'autres fichiers.
+      // Donc on ne tente l'auto-load que si on est servi via http(s).
+      if (!/^https?:$/.test(location.protocol)) {
+        // On laisse silencieux pour ne pas polluer, mais tu peux décommenter si tu veux afficher un message.
+        // showError("Auto-chargement désactivé en mode fichier local (ouvre la page via un lien https).", "warning");
+        return;
+      }
+
       try {
-        showLoading("Tentative de chargement automatique...");
-        const res = await fetch('anniversaires_canon.xlsx');
-        if (!res.ok) throw new Error('Fichier non trouvé');
-        
-        const buf = await res.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array' });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        loadFromSheet(sheet);
-      } catch (error) {
+        showLoading("Chargement automatique...");
+
+        // Option: ?file=monfichier.xlsx
+        const params = new URLSearchParams(location.search);
+        const paramFile = params.get('file');
+        if (paramFile) {
+          await tryFetchXlsx(paramFile);
+          return;
+        }
+
+        // Sinon, on tente quelques noms classiques dans le même dossier
+        const candidates = [
+          'anniversaires_canon.xlsx',
+          'anniversaires.xlsx',
+          'anniversaires.xls'
+        ];
+
+        for (const c of candidates) {
+          try {
+            await tryFetchXlsx(c);
+            return;
+          } catch (_) {}
+        }
+
         hideLoading();
-        // Échec silencieux pour l'auto-chargement
+      } catch (_) {
+        hideLoading();
       }
     })();
   </script>
