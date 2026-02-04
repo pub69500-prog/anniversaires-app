@@ -378,16 +378,11 @@
       state.data = uniqueRows;
       state.stats = { valid: validCount, errors: errorCount, duplicates: rows.length - uniqueRows.length };
       
-      // Mise à jour de l'interface
+      // Mise à jour de l'interface : trier par prochains d'abord (aujourd'hui en premier)
+      state.sort = 'upcoming';
       populateMonthFilter();
       applyFiltersAndRender();
-      
-      // Afficher les boutons d'action
-      $('btnExport').classList.remove('hidden');
-      $('btnNotify').classList.remove('hidden');
-      
-      // Vérifier les anniversaires proches
-      checkUpcomingBirthdays();
+
       
       hideLoading();
       
